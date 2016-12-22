@@ -1,0 +1,32 @@
+<?php
+global $RestFriend;
+
+function restfriend_example_menu(){
+  global $RestFriend;
+  return $RestFriend->getMenu();
+}
+
+// Add 404 errors to api-based paths, to stop it defaulting to Drupal's default one. If there is no user-facing site other than the API, you could also achieve this with themes.
+foreach(array("api","api/%","api/%/%","api/%/%/%") as $path){
+  $RestFriend->addEndpoint("GET",$path,function(){ return restfriend_core_return_error(404,"notFound","This resource does not exist"); });
+}
+
+$RestFriend->addEndpoint("GET","api/v1/authenticate",function(){ return restfriend_core_authenticate(); });
+$RestFriend->addEndpoint("GET","api/v1/things",function(){
+  return array(
+    "success" => true,
+    "things" => range(1,10)
+  );
+}, array('access content'));
+$RestFriend->addEndpoint("POST","api/v1/things",function(){
+  return array(
+    "success" => true,
+    "message" => "You created a thing (not really)."
+  );
+},['administer content']);
+$RestFriend->addEndpoint("GET","api/v1/things/%",function(){
+  return array(
+    "success" => true,
+    "thing" => arg(3)
+  );
+});

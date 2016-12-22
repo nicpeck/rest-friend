@@ -1,0 +1,6 @@
+name = REST Friend Example Implementation
+description = Some example API endpoints & callbacks. Copy or modify this one for your own API.
+package = REST Friend
+core = 7.x
+dependencies[] = restfriend:restfriend_core
+project = "restfriend"

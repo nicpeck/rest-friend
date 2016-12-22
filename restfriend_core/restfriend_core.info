@@ -1,0 +1,5 @@
+name = REST Friend Core
+description = Core logic & functions for creating a custom API
+package = REST Friend
+core = 7.x
+project = "restfriend"

@@ -1,0 +1,39 @@
+<?php
+function restfriend_core_schema() {
+  $schema['restfriend_core_authtokens'] = array(
+    'description' => 'Stores tokens for API request authentication.',
+    'fields' => array(
+      'uid' => array(
+        'type' => 'int',
+        'not null' => TRUE,
+        'description' => "User's {users}.uid.",
+      ),
+      'token' => array(
+        'type' => 'varchar',
+        'length' => '64',
+        'not null' => FALSE,
+        'default' => NULL,
+        'description' => 'The token',
+      ),
+      'expires' => array(
+        'type' => 'int',
+        'not null' => FALSE,
+        'default' => NULL,
+        'description' => 'Timestamp for when the token expires.',
+      )
+    ),
+    'primary key' => array('uid'),
+    'unique keys' => array(
+      'token' => array('token'),
+    ),
+    // 'indexes' => array('token' => array('token')),
+    'foreign keys' => array(
+      'user' => array(
+        'table' => 'users',
+        'columns' => array('uid' => 'uid'),
+      )
+    )
+  );
+
+  return $schema;
+}

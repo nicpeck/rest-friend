@@ -1,0 +1,134 @@
+<?php
+require_once(drupal_get_path('module','restfriend_core').'/classes.inc');
+require_once DRUPAL_ROOT . '/' . variable_get('password_inc', 'includes/password.inc');
+
+global $RestFriend;
+$RestFriend = new \RestFriend\API;
+
+// function restfriend_core_menu(){
+// }
+
+function restfriend_core_endpoint_delivery(){
+  header("Content-Type: application/json");
+  print json_encode(restfriend_core_endpoint_handle());
+}
+
+function restfriend_core_endpoint_handle(){
+  global $RestFriend, $user;
+
+  $out = array();
+
+  $menu = menu_get_item();
+  if(!$menu){
+    return restfriend_core_return_error(500,"menuError","Sorry, your request could not be processed. Please try again.");
+  }
+
+  if(!array_key_exists($menu['path'],$RestFriend->endpoints)){
+    return restfriend_core_return_error(404,"notFound","This resource doesn't exist");
+  }
+  if(array_key_exists($_SERVER['REQUEST_METHOD'],$RestFriend->endpoints[$menu['path']])){
+    $endpoint = $RestFriend->endpoints[$menu['path']][$_SERVER['REQUEST_METHOD']];
+  }else{
+    return restfriend_core_return_error(400,"unsupportedMethod","Method '{$_SERVER['REQUEST_METHOD']}' is not allowed here.");
+  }
+
+  if(count($endpoint->access)>0){
+    $token = false;
+    if(isset($_SERVER['HTTP_AUTHORIZATION']) ? preg_match('/bearer\s(.*?)(\s|\,|$)/i',$_SERVER['HTTP_AUTHORIZATION'],$tokenMatch) : false){
+      if(isset($tokenMatch[1])){
+        $token = $tokenMatch[1];
+      }
+    }else if(isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? preg_match('/bearer\s(.*?)(\s|\,|$)/i',$_SERVER['REDIRECT_HTTP_AUTHORIZATION'],$tokenMatch) : false){
+      if(isset($tokenMatch[1])){
+        $token = $tokenMatch[1];
+      }
+    }
+
+    $uid = 0;
+    if($token){
+      $result = db_select('restfriend_core_authtokens')
+      ->fields('restfriend_core_authtokens',array('uid'))
+      ->condition('token',$token)
+      ->execute()
+      ->fetchField();
+      if($result){
+        $uid = $result;
+      }else{
+        return restfriend_core_return_error(400,"tokenInvalid","Your access token is invalid or missing.");
+      }
+    }
+
+    $user = user_load($uid);
+    // if(!is_object($user)){
+    //   return restfriend_core_return_error(401,"tokenNotFound","Your access token is invalid or expired.");
+    // }
+
+    foreach($endpoint->access as $accessRule){
+      if(!user_access($accessRule,$user)){
+        return restfriend_core_return_error(403,"unauthorised","You don't have permission to access this.");
+      }
+    }
+
+  }
+
+  $callback = $endpoint->callback;
+  return $callback();
+}
+
+function restfriend_core_return_error($status = 500, $error = "error", $message = ""){
+
+  /*
+  * 200 - OK
+  * 404 - Not Found
+  * 500 - Internal Server Error
+  * 201 - Created
+  * 304 - Not Modified
+  * 400 - Bad Request
+  * 401 - Unauthorized
+  * 403 - Forbidden
+  */
+
+  http_response_code($status);
+  return array(
+    "success" => false,
+    "error" => $error,
+    "message" => $message
+  );
+}
+
+function restfriend_core_authenticate(){
+  $authUser = isset($_SERVER['PHP_AUTH_USER'])?$_SERVER['PHP_AUTH_USER']:NULL;
+  $authPw = isset($_SERVER['PHP_AUTH_PW'])?$_SERVER['PHP_AUTH_PW']:NULL;
+
+  if(is_null($authUser) || is_null($authPw)){
+    return restfriend_core_return_error(400,"authError","Your authentication details were missing or invalid.");
+  }
+
+  $user = user_load_by_name($authUser);
+  if(is_object($user)?$user->uid==0:true){
+    $user = user_load_by_mail($authUser);
+    if(is_object($user)?$user->uid==0:false){
+      $user = false;
+    }
+  }
+
+  $auth = $user?user_check_password($authPw,$user):false;
+  if($auth){
+    $token = new \RestFriend\Token($user->uid);
+    if($token->value){
+      $out = array(
+        "success" => true,
+        "message" => "Logged in successfully.",
+        "token" => $token->value
+      );
+      if(!is_null($token->expires)){
+        $out['tokenExpires'] = $token->expires;
+      }
+      return $out;
+    }else{
+      return restfriend_core_return_error(500,"tokenError","Failed to generate a token.");
+    }
+  }else{
+    return restfriend_core_return_error(401,"authFail","Your login details were incorrect.");
+  }
+}
